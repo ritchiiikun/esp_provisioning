@@ -6,16 +6,14 @@ import '../ble_service.dart';
 import './wifi.dart';
 
 class WifiBloc extends Bloc<WifiEvent, WifiState> {
-  var bleService = BleService.getInstance();
-  EspProv prov;
+  final bleService = BleService.getInstance();
+  EspProv? prov;
   Logger log = Logger(printer: PrettyPrinter());
 
   WifiBloc(WifiState initialState) : super(initialState);
 
   @override
-  Stream<WifiState> mapEventToState(
-    WifiEvent event,
-  ) async* {
+  Stream<WifiState> mapEventToState(WifiEvent event) async* {
     if (event is WifiEventLoad) {
       yield* _mapLoadToState();
     } else if (event is WifiEventStartProvisioning) {
@@ -28,21 +26,22 @@ class WifiBloc extends Bloc<WifiEvent, WifiState> {
     try {
       prov = await bleService.startProvisioning();
     } catch (e) {
-      log.e('Error conencting to device $e');
-      yield WifiStateError('Error conencting to device');
+      log.e('Error connecting to device $e');
+      yield WifiStateError('Error connecting to device');
+      return;
     }
     yield WifiStateScanning();
 
     try {
-      var listWifi = await prov.startScanWiFi();
+      var listWifi = await prov!.startScanWiFi();
       List<Map<String, dynamic>> mapListWifi = [];
-      listWifi.forEach((element) {
+      for (var element in listWifi) {
         mapListWifi.add({
           'ssid': element.ssid,
           'rssi': element.rssi,
-          'auth': element.private.toString() != 'Open'
+          'auth': element.private.toString() != 'Open',
         });
-      });
+      }
 
       yield WifiStateLoaded(wifiList: mapListWifi);
       log.v('Wifi $listWifi');
@@ -53,7 +52,8 @@ class WifiBloc extends Bloc<WifiEvent, WifiState> {
   }
 
   Stream<WifiState> _mapProvisioningToState(
-      WifiEventStartProvisioning event) async* {
+    WifiEventStartProvisioning event,
+  ) async* {
     yield WifiStateProvisioning();
     await prov?.sendWifiConfig(ssid: event.ssid, password: event.password);
     await prov?.applyWifiConfig();
@@ -62,8 +62,8 @@ class WifiBloc extends Bloc<WifiEvent, WifiState> {
   }
 
   @override
-  Future<void> close() {
-    prov?.dispose();
+  Future<void> close() async {
+    await prov?.dispose();
     return super.close();
   }
 }

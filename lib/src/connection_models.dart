@@ -5,27 +5,20 @@ enum WifiConnectionState {
   ConnectionFailed,
 }
 
-enum WifiConnectFailedReason {
-  AuthError,
-  NetworkNotFound,
-}
+enum WifiConnectFailedReason { AuthError, NetworkNotFound }
 
 class ConnectionStatus {
-  ConnectionStatus({
-    this.state,
-    this.ip,
-    this.failedReason,
-  });
+  ConnectionStatus({required this.state, required this.ip, this.failedReason});
 
   final WifiConnectionState state;
   final String ip;
-  final WifiConnectFailedReason failedReason;
+  final WifiConnectFailedReason? failedReason;
 }
 
 class WifiAP {
   const WifiAP({
-    this.ssid,
-    this.rssi,
+    required this.ssid,
+    required this.rssi,
     this.active = false,
     this.private = true,
   });

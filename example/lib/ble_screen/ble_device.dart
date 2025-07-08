@@ -1,17 +1,21 @@
 import 'package:collection/collection.dart';
-import 'package:flutter_ble_lib/flutter_ble_lib.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class BleDevice {
-  final Peripheral peripheral;
+  final BluetoothDevice device;
   final String name;
   int rssi;
 
-  String get id => peripheral.identifier;
+  String get id => device.remoteId.str;
 
   BleDevice(ScanResult scanResult)
-      : peripheral = scanResult.peripheral,
-        name = scanResult.peripheral.name ?? scanResult.advertisementData.localName ?? "Unknown",
-        rssi = scanResult.rssi;
+    : device = scanResult.device,
+      name = scanResult.device.platformName.isNotEmpty
+          ? scanResult.device.platformName
+          : (scanResult.advertisementData.advName.isNotEmpty
+                ? scanResult.advertisementData.advName
+                : "Unknown"),
+      rssi = scanResult.rssi;
 
   @override
   int get hashCode => id.hashCode;
@@ -19,24 +23,17 @@ class BleDevice {
   @override
   bool operator ==(other) =>
       other is BleDevice &&
-      this.name != null &&
-      other.name != null &&
       compareAsciiLowerCase(this.name, other.name) == 0 &&
       this.id == other.id &&
       this.rssi == other.rssi;
 
   @override
   String toString() {
-    return 'BleDevice {name: $name, id: $id, rssid: $rssi}';
+    return 'BleDevice {name: $name, id: $id, rssi: $rssi}';
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'rssi': rssi,
-      'peripheral': peripheral,
-    };
+    return {'id': id, 'name': name, 'rssi': rssi, 'device': device};
   }
 
   int compareTo(BleDevice other) {

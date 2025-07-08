@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:flutter_ble_lib/flutter_ble_lib.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'transport.dart';
 
 class TransportBLE implements ProvTransport {
-  final Peripheral peripheral;
+  final BluetoothDevice device;
   final String serviceUUID;
-  Map<String, String> nuLookup;
   final Map<String, String> lockupTable;
+  late final Map<String, String> nuLookup;
 
   static const PROV_BLE_SERVICE = '021a9004-0382-4aea-bff4-6b3f1c5adfb4';
   static const PROV_BLE_EP = {
@@ -19,12 +19,14 @@ class TransportBLE implements ProvTransport {
     'custom-data': 'ff54',
   };
 
-  TransportBLE(this.peripheral,
-      {this.serviceUUID = PROV_BLE_SERVICE, this.lockupTable = PROV_BLE_EP}) {
-    nuLookup = new Map<String, String>();
-
+  TransportBLE(
+    this.device, {
+    this.serviceUUID = PROV_BLE_SERVICE,
+    this.lockupTable = PROV_BLE_EP,
+  }) {
+    nuLookup = <String, String>{};
     for (var name in lockupTable.keys) {
-      var charsInt = int.parse(lockupTable[name], radix: 16);
+      var charsInt = int.parse(lockupTable[name]!, radix: 16);
       var serviceHex = charsInt.toRadixString(16).padLeft(4, '0');
       nuLookup[name] =
           serviceUUID.substring(0, 4) + serviceHex + serviceUUID.substring(8);
@@ -32,42 +34,47 @@ class TransportBLE implements ProvTransport {
   }
 
   Future<bool> connect() async {
-    bool isConnected = await peripheral.isConnected();
-    if (isConnected) {
-      return Future.value(true);
+    var state = await device.state.first;
+    if (state == BluetoothDeviceState.connected) {
+      return true;
     }
-    await peripheral.connect(requestMtu: 512);
-    await peripheral.discoverAllServicesAndCharacteristics(
-        transactionId: 'discoverAllServicesAndCharacteristics');
-    return await peripheral.isConnected();
+    await device.connect(autoConnect: false);
+    // Wait for connection
+    await device.state.firstWhere((s) => s == BluetoothDeviceState.connected);
+    return true;
   }
 
   Future<Uint8List> sendReceive(String epName, Uint8List data) async {
-    if (data != null){ 
-      if( data.length > 0){
-        await peripheral.writeCharacteristic(serviceUUID, nuLookup[epName??""], data, true);
-      }
+    final services = await device.discoverServices();
+    final service = services.firstWhere(
+      (s) => s.uuid.toString().toLowerCase() == serviceUUID.toLowerCase(),
+      orElse: () => throw Exception('Service $serviceUUID not found'),
+    );
+    final charUuid = nuLookup[epName]!.toLowerCase();
+    final characteristic = service.characteristics.firstWhere(
+      (c) => c.uuid.toString().toLowerCase().endsWith(charUuid),
+      orElse: () => throw Exception('Characteristic $charUuid not found'),
+    );
+    if (data.isNotEmpty) {
+      await characteristic.write(data, withoutResponse: false);
     }
-    CharacteristicWithValue receivedData = await peripheral.readCharacteristic(
-        serviceUUID, nuLookup[epName??""],
-        transactionId: 'readCharacteristic');
-    return receivedData.value;
+    final value = await characteristic.read();
+    return Uint8List.fromList(value);
   }
 
   Future<void> disconnect() async {
-    bool check = await peripheral.isConnected();
-    if(check){  
-      return await peripheral.disconnectOrCancelConnection();
-    }else{
-      return;
+    var state = await device.state.first;
+    if (state == BluetoothDeviceState.connected) {
+      await device.disconnect();
     }
   }
 
   Future<bool> checkConnect() async {
-    return await peripheral.isConnected();
+    var state = await device.state.first;
+    return state == BluetoothDeviceState.connected;
   }
 
   void dispose() {
-    print('dispose ble');
+    // No-op for now
   }
 }
